@@ -42,7 +42,7 @@ def eye_aspect_ratio(eye):
     return (A + B) / (2.0 * C)
 
         
-def frameBlinkChecker(frame,predictor,detector,blink_th,lStart,lEnd) :
+def frameBlinkChecker(frame,predictor,detector,blink_th,start_idx,end_idx) :
 
 
 	frame = imutils.resize(frame, width=450)
@@ -52,8 +52,8 @@ def frameBlinkChecker(frame,predictor,detector,blink_th,lStart,lEnd) :
 	for rect in rects:
 	    shape = predictor(gray, rect)
 	    shape = face_utils.shape_to_np(shape)
-	    leftEye = shape[lStart:lEnd]
-	    EAR = eye_aspect_ratio(leftEye)
+	    eye = shape[start_idx:end_idx]
+	    EAR = eye_aspect_ratio(eye)
 	
 	if EAR > blink_th:
 		return True

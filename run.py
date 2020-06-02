@@ -22,9 +22,9 @@ ANRD_HEIGHT = 1780
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--util_path',default='./utils/',required = False, help='util file path')
-parser.add_argument('--blink_th',default=0.3,required=False, help='eye blick value threshold')
+parser.add_argument('--blink_th',default=0.25,required=False, help='eye blick value threshold')
 parser.add_argument('--port',default=8100,type=int)
-parser.add_argument('--ip',default='192.168.0.25')
+parser.add_argument('--ip',default='172.16.101.228')
 
 args = parser.parse_args()
 
@@ -41,9 +41,13 @@ predictor = dlib.shape_predictor(predictor_path)
 detector = dlib.get_frontal_face_detector()
 
 (lStart, lEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
-
+(rStart, rEnd) = face_utils.FACIAL_LANDMARKS_IDXS["right_eye"]
 
 model = vggModel.VGG_16() 
+
+emotionModel = senetModel.Senet50_ferplus_dag()
+model.load_state_dict(torch.load('model/senet50_ferplus_dag.pth'))
+model.eval()
 
 
 device = torch.device('cpu')
@@ -106,13 +110,16 @@ try:
             blink = 0
         else :
             blink = 1
+        if(econ.frameBlinkChecker(image,predictor,detector,BLINK_TH,rStart,rEnd)) :
+            scroll = 0
+        else :
+            scroll = 1
 
-        # blink = 0
-        # x = round(x*1200/2  + 1200/2)
-        # y = round(y*1740/2  + 1740/2)
+
         x, y  = econ.getXY(cur_point, facePoint,count,diff_TH,freeze_TH)
         x, y  = econ.strechingPoint(x,y,IMG_WIDTH,IMG_HEIGHT,ANRD_WIDTH,ANRD_HEIGHT)
-        cord = str(int(x)) + '/' + str(int(y)) + '/' +str(blink)
+        
+        cord = str(int(x)) + '/' + str(int(y)) + '/' +str(blink) + '/' + str(scroll)
         print('Send to Android :',cord)
         client_socket.sendall(bytes(cord,'utf8'))
 
