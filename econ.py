@@ -73,7 +73,7 @@ def getFaceXY(faces) :
     y = face[1] + face[3]/2
     return [x,y]
 
-def getXY(cur_point,next_point,count,diff_TH,freeze_TH,momentum=0.9) :
+def getXY(cur_point,next_point,count,diff_TH,freeze_TH,momentum=0.8) :
     
     if(count == -1) :
         count=0
@@ -110,8 +110,15 @@ def load_checkpoint(filename='./checkpoint.pth.tar'):
     state = torch.load(filename,map_location=device)
     return state
 
-def strechingPoint(x,y,beforeW,beforeH,afterW,afterH,strechFactor=1.2):
-    return x*(afterW/beforeW) *strechFactor , y* (afterH/beforeH) *strechFactor
+def recGenerator(image,faces,eyes) :
+    for (x,y,w,h) in faces:
+        cv2.rectangle(image,(x,y),(x+w,y+h),(255,0,0),2)
+    for (x,y,w,h) in eyes:
+        cv2.rectangle(image,(x,y),(x+w,y+h),(0,255,0),2)
+
+def strechingPoint(x,y,beforeW,beforeH,afterW,afterH,strechFactor=1.5,H_weight=300):
+    return x*(afterW/beforeW) *strechFactor , y* (afterH/beforeH) *strechFactor -H_weight
+
 
 # Model
 # def getGazeXY(image,face,eyes) : 

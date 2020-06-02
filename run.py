@@ -11,8 +11,8 @@ import torch
 import torchvision.transforms as transforms
 from PIL import Image
 
-diff_TH = 200
-freeze_TH = 5
+diff_TH = 300
+freeze_TH = 8
 WEIGHT_POINT = 0.8
 
 IMG_WIDTH = 480
@@ -94,7 +94,7 @@ try:
 
         faceFrame,eyeFrame = econ.getFaceEyePoint(image,faceCascade,eyeCascade)
 
-        gazePoint = np.array( econ.getGazeXY(model,inputData) )
+        # gazePoint = np.array( econ.getGazeXY(model,inputData) )
 
         if len(faceFrame) > 0 :
             facePoint = np.array(econ.getFaceXY(faceFrame))
@@ -116,8 +116,8 @@ try:
         print('Send to Android :',cord)
         client_socket.sendall(bytes(cord,'utf8'))
 
-
-        # cv2.imshow('AndroidScreen', image)
+        econ.recGenerator(image,faceFrame,eyeFrame)
+        cv2.imshow('AndroidScreen', image)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
         	break
