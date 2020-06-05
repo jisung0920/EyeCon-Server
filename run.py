@@ -4,11 +4,13 @@ import socket
 import numpy as np
 import cv2
 from scipy.spatial import distance as dist
+from statistics import mode
 from imutils import face_utils
 import dlib
 import torch
 import torchvision.transforms as transforms
 from PIL import Image
+
 
 diff_TH = 300
 freeze_TH = 8
@@ -49,6 +51,7 @@ detector = dlib.get_frontal_face_detector()
 
 districtList = econ.getDistrictList(ANRD_WIDTH,ANRD_HEIGHT)
 
+
 Gaze_model = econ.getGazeModel()
 Gaze_model.eval()
 
@@ -71,7 +74,12 @@ server_socket.listen()
 print('listening...')
 
 cur_point = np.array((IMG_WIDTH/2,IMG_HEIGHT/2))
-count = -1
+count = 0
+
+gazeQue = [0 for i in range(3)]
+
+
+
 try:
     client_socket, addr = server_socket.accept()
     print('Connected with ', addr)
@@ -94,8 +102,13 @@ try:
 
         print('Estimate district')
 
-        gazePoint = np.array(econ.getGazeDistrictPoint(Gaze_model,inputData,districtList))
-
+        gazeIdx = econ.getGazeDistrictIdx(Gaze_model,inputData)
+        print(gazeIdx)
+        gazeQue[count%3] = gazeIdx
+        gazeCount = np.array([0 for i in range(16)])
+        for i in gazeQue :
+            gazeCount[i] +=1
+        gazePoint = districtList[gazeCount.argmax()]
 
         print('Get face point',end='\t| ')
 
@@ -125,16 +138,18 @@ try:
             # emotionNum = 0
             # tagPosition = (0,0)
 
-        x, y  = econ.getXY(cur_point, facePoint,count,diff_TH,freeze_TH)
-        x, y  = econ.strechingPoint(x,y,IMG_WIDTH,IMG_HEIGHT,ANRD_WIDTH,ANRD_HEIGHT)
-        
-        cord = str(int(x)) + '/' + str(int(y)) + '/' +str(blink) + '/' + str(scroll) + '/' + str(emotionNum)
+        # x, y  = econ.getXY(cur_point, facePoint,count,diff_TH,freeze_TH)
+        # x, y  = econ.strechingPoint(x,y,IMG_WIDTH,IMG_HEIGHT,ANRD_WIDTH,ANRD_HEIGHT)
+
+        x,y = gazePoint
+        cord = str(x) + '/' + str(y) + '/' +str(blink) + '/' + str(scroll) + '/' + str(emotionNum)
         print('Send to Android :',cord)
         client_socket.sendall(bytes(cord,'utf8'))
 
         cv2.putText(image,emotion_dict[emotionNum],tagPosition, cv2.FONT_HERSHEY_SIMPLEX, 0.8,(0, 255, 0), 1, cv2.LINE_AA)
         econ.recGenerator(image,faceFrame,eyeFrame)
         cv2.imshow('Android Screen', image)
+        count += 1
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 

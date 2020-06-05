@@ -130,11 +130,16 @@ def getGazeModel(filePath = './model/senet50_gaze_class.pth.tar') :
     model = eModel.senet50()
     device = torch.device('cpu')
     checkpoint =torch.load(filePath,map_location=device)['state_dict']
+    # print(model)
     for key in list(checkpoint.keys()):
         if 'module.' in key:
+            # checkpoint[key[15:]] = checkpoint[key]
+
             checkpoint[key.replace('module.', '')] = checkpoint[key]
             del checkpoint[key]
-    model.load_state_dict(checkpoint,strict=False)
+        # if 'layer' in key :
+        #     del checkpoint[key]
+    model.load_state_dict(checkpoint)
     return model
 
 
@@ -144,16 +149,15 @@ def getDistrictList(W,H,num=4) :
     part = num*num*2
     for i in range (0,num) :
         for j in range(0, num) :
-            width = (W/part) * (2*j +1)
-            height = (H/part) * (2*i +1)
+            width = (W/(num*2)) * (2*j +1)
+            height = (H/(num*2)) * (2*i +1)
             districtList[d_count] = (int(width),int(height))
             d_count += 1
     return np.array(districtList)
 
-def getGazeDistrictPoint(model,image,districtList):
+def getGazeDistrictIdx(model,image):
     result = model(image[None, ...])[0]
-
-    return districtList[torch.argmax(result)]
+    return torch.argmax(result)
 
 
 
