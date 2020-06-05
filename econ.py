@@ -8,9 +8,8 @@ import dlib
 import random
 import os
 import torch
-
-
-
+import eModel
+import math
 
 
 def getCascade(util_path) :
@@ -24,6 +23,8 @@ def getCascade(util_path) :
     return faceCascade,eyeCascade  
 
 
+
+
 def getFaceEyePoint(frame,faceCascade, eyeCascade) :
     
     faces = faceCascade.detectMultiScale(frame,1.2,cv2.COLOR_BGR2GRAY)
@@ -33,6 +34,7 @@ def getFaceEyePoint(frame,faceCascade, eyeCascade) :
     eyes=eyeCascade.detectMultiScale(faceFrame,1.2,cv2.COLOR_BGR2GRAY)
     
     return faces,eyes
+
 
 
 def eye_aspect_ratio(eye):
@@ -113,13 +115,64 @@ def load_checkpoint(filename='./checkpoint.pth.tar'):
 def recGenerator(image,faces,eyes) :
     for (x,y,w,h) in faces:
         cv2.rectangle(image,(x,y),(x+w,y+h),(255,0,0),2)
-    for (x,y,w,h) in eyes:
-        cv2.rectangle(image,(x,y),(x+w,y+h),(0,255,0),2)
+    # for (x,y,w,h) in eyes:
+    #     cv2.rectangle(image,(x,y),(x+w,y+h),(0,255,0),2)
 
 def strechingPoint(x,y,beforeW,beforeH,afterW,afterH,strechFactor=1.5,H_weight=300):
     return x*(afterW/beforeW) *strechFactor , y* (afterH/beforeH) *strechFactor -H_weight
 
+def getFERModel(filePath = './model/senet50_ferplus_dag.pth'):
+    model = eModel.Senet50_ferplus_dag()
+    model.load_state_dict(torch.load(filePath))
+    return model
 
+def getGazeModel(filePath = './model/senet50_gaze_class.pth.tar') :
+    model = eModel.senet50()
+    device = torch.device('cpu')
+    checkpoint =torch.load(filePath,map_location=device)['state_dict']
+    for key in list(checkpoint.keys()):
+        if 'module.' in key:
+            checkpoint[key.replace('module.', '')] = checkpoint[key]
+            del checkpoint[key]
+    model.load_state_dict(checkpoint,strict=False)
+    return model
+
+
+def getDistrictList(W,H,num=4) :
+    districtList = [ 0 for i in range(num*num)]
+    d_count = 0
+    part = num*num*2
+    for i in range (0,num) :
+        for j in range(0, num) :
+            width = (W/part) * (2*j +1)
+            height = (H/part) * (2*i +1)
+            districtList[d_count] = (int(width),int(height))
+            d_count += 1
+    return np.array(districtList)
+
+def getGazeDistrictPoint(model,image,districtList):
+    result = model(image[None, ...])[0]
+
+    return districtList[torch.argmax(result)]
+
+
+
+def getExpression(faceFrame,image,FERmodel) :
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    for (x, y, w, h) in faceFrame:
+        roi_gray = gray[y:y + h, x:x + w]
+        cropped_img = np.expand_dims(cv2.resize(roi_gray, (224, 224)), -1)
+        cv2.normalize(cropped_img, cropped_img, alpha=0, beta=1, norm_type=cv2.NORM_L2, dtype=cv2.CV_32F)
+        # cropped_img = transforms.ToTensor()
+        cropped_img = torch.from_numpy(cropped_img)
+        cropped_img = cropped_img.float()
+        output = FERmodel(cropped_img)
+        _, prediction = torch.max(output, 1)
+        prediction = prediction.data[0]
+        prediction = prediction.data[0]
+        return int(prediction.data[0]) ,( x, y)
+    return 0,(0,0)
 # Model
 # def getGazeXY(image,face,eyes) : 
 # 	x = 500 + random.randint(-50, 50)
