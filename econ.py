@@ -110,8 +110,13 @@ def recGenerator(image,faces,eyes) :
     # for (x,y,w,h) in eyes:
     #     cv2.rectangle(image,(x,y),(x+w,y+h),(0,255,0),2)
 
-def strechingPoint(x,y,beforeW,beforeH,afterW,afterH,strechFactor=1.5,H_weight=300):
-    return x*(afterW/beforeW) *strechFactor , y* (afterH/beforeH) *strechFactor -H_weight
+def strechingPoint(x,y,beforeW,beforeH,afterW,afterH,strechFactor=1.5):
+    return x*(afterW/beforeW) *strechFactor , y* (afterH/beforeH) *strechFactor
+
+def transferRateToDistance(r_x,r_y,width,height, weight = 1.5) :
+    d_x = (width*r_x) * weight
+    d_y = (height*r_y) * weight
+    return int(d_x),int(d_y)
 
 def getFERModel(filePath = './model/senet50_ferplus_dag.pth'):
     model = eModel.Senet50_ferplus_dag()

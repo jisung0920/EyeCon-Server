@@ -3,7 +3,6 @@ import econ
 import socket
 import numpy as np
 import cv2
-import imutils
 from imutils import face_utils
 import dlib
 import torch
@@ -86,7 +85,7 @@ state_memory['FacePointX'] = np.array([IMG_WIDTH/2 for i in range(state_directio
 state_memory['FacePointY'] = np.array([IMG_HEIGHT/2 for i in range(state_direction_num)])
 
 
-state_Q_num = 4
+state_Q_num = 3
 state_memory['Click'] = [0 for i in range(state_Q_num)]
 state_memory['Scroll'] = [0 for i in range(state_Q_num)]
 state_memory['FER'] = [0 for i in range(state_Q_num)]
@@ -212,11 +211,19 @@ try:
         print('Sent to Client',end='\t')
 
 
-        print(gazeRatioLR,gazeRatioTB,'\n',faceDirectionX,faceDirectionY)
+        # print(gazeRatioLR,gazeRatioTB,'\n',faceDirectionX,faceDirectionY)
         # x, y  = econ.getXY(cur_point, facePoint,count,diff_TH,freeze_TH)
         # x, y  = econ.strechingPoint(x,y,IMG_WIDTH,IMG_HEIGHT,ANRD_WIDTH,ANRD_HEIGHT)
 
         x,y = gazePoint
+        x,y =  int(ANRD_WIDTH/2), int(ANRD_HEIGHT/2)
+        device_width = ANRD_WIDTH / 4
+        device_height = ANRD_HEIGHT / 4
+        d1_x,d1_y = econ.transferRateToDistance(gazeRatioLR,gazeRatioTB,device_width,device_height,weight=5)
+        d2_x, d2_y = econ.transferRateToDistance(faceDirectionX, faceDirectionY, device_width, device_height,weight=5)
+        x += d1_x +d2_x
+        y += d2_x +d2_y
+        # gazeRatioLR
         cord = str(x) + '/' + str(y) + '/' +str(blink) + '/' + str(scroll) + '/' + str(FERNum)
         print(cord)
         client_socket.sendall(bytes(cord,'utf8'))
@@ -224,7 +231,7 @@ try:
 
 
         econ.recGenerator(image,faceFrame,eyeFrame)
-        cv2.imshow('Android Screen', image)
+        # cv2.imshow('Android Screen', image)
         count += 1
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
