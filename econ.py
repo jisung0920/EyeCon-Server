@@ -3,87 +3,18 @@ import numpy as np
 import cv2
 from scipy.spatial import distance as dist
 from imutils import face_utils
+import torchvision.transforms as transforms
 import imutils
 import dlib
 import random
 import os
 import torch
-import eModel
 import math
 
 
-def getCascade(util_path) :
-
-    face_haar_path = util_path + 'haarcascade_frontalface_default.xml'
-    eye_haar_path  = util_path + 'haarcascade_eye.xml'
-    
-    faceCascade = cv2.CascadeClassifier(face_haar_path)
-    eyeCascade = cv2.CascadeClassifier(eye_haar_path)
-    
-    return faceCascade,eyeCascade  
 
 
 
-
-def getFaceEyePoint(frame,faceCascade, eyeCascade) :
-    
-    faces = faceCascade.detectMultiScale(frame,1.2,cv2.COLOR_BGR2GRAY)
-    faceFrame = frame
-    for (x,y,w,h) in faces :
-        faceFrame = frame[y:y+h,x:x+w]
-    eyes=eyeCascade.detectMultiScale(faceFrame,1.2,cv2.COLOR_BGR2GRAY)
-    
-    return faces,eyes
-
-
-
-def eye_aspect_ratio(eye):
-    A = dist.euclidean(eye[1], eye[5])
-    B = dist.euclidean(eye[2], eye[4])
-    C = dist.euclidean(eye[0], eye[3])
-    return (A + B) / (2.0 * C)
-
-        
-def frameBlinkChecker(eyeLandmark,blink_th,start_idx,end_idx) :
-
-    eye = eyeLandmark[start_idx:end_idx]
-    EAR = eye_aspect_ratio(eye)
-
-    if EAR > blink_th:
-        return True
-    else :
-        return False
-
-
-def getGazeXY(model,image):
-    tmp = model(image[None, ...])[0]
-    x = tmp[0].item()
-    y = tmp[1].item()
-    return x,y
-
-def getFaceXY(faces) :
-    face = faces[0]
-    x = face[0] + face[2]/2
-    y = face[1] + face[3]/2
-    return x,y
-
-def getXY(cur_point,next_point,count,diff_TH,freeze_TH,momentum=0.8) :
-    
-    if(count == -1) :
-
-        return next_point
-
-    point_dff = dist.euclidean(cur_point,next_point)
-    
-    if(point_dff >diff_TH) :
-        count +=1
-        if(count>freeze_TH) :
-
-            return next_point
-        return cur_point
-
-    return (next_point * momentum) + (cur_point* (1-momentum))
-        
 def recvAll(sock, count):
     buf = b''
     while count:
@@ -94,62 +25,93 @@ def recvAll(sock, count):
         count -= len(newbuf)
     return buf
 
-def load_checkpoint(filename='./checkpoint.pth.tar'):
-    print(filename)
-    if not os.path.isfile(filename):
-        print('Cant load')
-        return None
-    
-    device = torch.device('cpu')
-    state = torch.load(filename,map_location=device)
-    return state
 
-def recGenerator(image,faces,eyes) :
-    for (x,y,w,h) in faces:
-        cv2.rectangle(image,(x,y),(x+w,y+h),(255,0,0),2)
-    # for (x,y,w,h) in eyes:
-    #     cv2.rectangle(image,(x,y),(x+w,y+h),(0,255,0),2)
+def modeList(L):
+    return max(set(L), key=L.count)
 
-def strechingPoint(x,y,beforeW,beforeH,afterW,afterH,strechFactor=1.5):
-    return x*(afterW/beforeW) *strechFactor , y* (afterH/beforeH) *strechFactor
 
-def transferRateToDistance(r_x,r_y,width,height, weight = 1.5) :
+def loadStateDict(state_direction_num,state_Q_num):
+
+    state_memory = dict()
+
+    state_memory['GazeRatioLR'] = np.array([1.0 for i in range(state_direction_num)])
+    state_memory['GazeRatioTB'] = np.array([1.0 for i in range(state_direction_num)])
+    state_memory['FacePointX'] = np.array([200 for i in range(state_direction_num)])
+    state_memory['FacePointY'] = np.array([300 for i in range(state_direction_num)])
+
+    state_memory['Click'] = [0 for i in range(state_Q_num)]
+    state_memory['Scroll'] = [0 for i in range(state_Q_num)]
+    state_memory['FER'] = [0 for i in range(state_Q_num)]
+
+    return state_memory
+
+
+def rateToDistance(r_x,r_y,width,height, weight = 1.5) :
     d_x = (width*r_x) * weight
     d_y = (height*r_y) * weight
     return int(d_x),int(d_y)
 
-def getFERModel(filePath = './model/senet50_ferplus_dag.pth'):
-    model = eModel.Senet50_ferplus_dag()
-    model.load_state_dict(torch.load(filePath))
-    return model
 
-def getGazeModel(filePath = './model/senet50_gaze_class.pth.tar') :
-    model = eModel.senet50()
-    device = torch.device('cpu')
-    checkpoint =torch.load(filePath,map_location=device)['state_dict']
-    for key in list(checkpoint.keys()):
-        if 'module.' in key:
-            checkpoint[key.replace('module.', '')] = checkpoint[key]
-            del checkpoint[key]
-    model.load_state_dict(checkpoint)
-    return model
+def loadClassifier(util_path) :
+
+    face_haar_path = util_path + 'haarcascade_frontalface_default.xml'
+    # eye_haar_path  = util_path + 'haarcascade_eye.xml'
+    
+    faceClassifier = cv2.CascadeClassifier(face_haar_path)
+    # eyeClassifier = cv2.CascadeClassifier(eye_haar_path)
+    
+    return faceClassifier
 
 
-def getDistrictList(W,H,num=4) :
-    districtList = [ 0 for i in range(num*num)]
-    d_count = 0
-    part = num*num*2
-    for i in range (0,num) :
-        for j in range(0, num) :
-            width = (W/(num*2)) * (2*j +1)
-            height = (H/(num*2)) * (2*i +1)
-            districtList[d_count] = (int(width),int(height))
-            d_count += 1
-    return np.array(districtList)
 
-def getGazeDistrictIdx(model,image):
+
+def classifyFace(image,faceClassifier) :
+    
+    facePoints = faceClassifier.detectMultiScale(image,1.2,cv2.COLOR_BGR2GRAY)
+    faceImage = image.copy()
+    for (x,y,w,h) in facePoints :
+        faceImage = faceImage[y:y+h,x:x+w]
+
+    # eyePoints=eyeClassifier.detectMultiScale(faceImage,1.2,cv2.COLOR_BGR2GRAY)
+    
+    return facePoints
+
+
+
+def getEAR(eye):
+    A = dist.euclidean(eye[1], eye[5])
+    B = dist.euclidean(eye[2], eye[4])
+    C = dist.euclidean(eye[0], eye[3])
+    return (A + B) / (2.0 * C)
+
+
+def isBlink(eyeLandmark,blink_th,start_idx,end_idx) :
+
+    eye = eyeLandmark[start_idx:end_idx]
+    EAR = getEAR(eye)
+
+    if EAR > blink_th:
+        return True
+    else :
+        return False
+
+def getFaceXY(faceImage) :
+    face = faceImage[0]
+    x = face[0] + face[2]/2
+    y = face[1] + face[3]/2
+    return x,y
+
+def getGazePoint(model,image,W,H):
     result = model(image[None, ...])[0]
-    return torch.argmax(result)
+    x_rate = 0
+    y_rate = 0
+    for i in [0,1,4,5,8,9,12,13] :
+        x_rate += result[i]
+    for i in [0,1,2,3,4,5,6,7] :
+        y_rate += result[i]
+    x = x_rate * W
+    y = y_rate * H
+    return x,y
 
 
 
@@ -171,8 +133,7 @@ def getExpression(faceFrame,gray,FERmodel) :
     return 0,(0,0)
 
 
-def getGazeRatio(image,gray,faceLandmark,eye_points, W=480,H=640):
-
+def getGazeRatio(gray,faceLandmark,eye_points):
     eye_region = np.array([(faceLandmark.part(eye_points[0]).x, faceLandmark.part(eye_points[0]).y),
                                 (faceLandmark.part(eye_points[1]).x, faceLandmark.part(eye_points[1]).y),
                                 (faceLandmark.part(eye_points[2]).x, faceLandmark.part(eye_points[2]).y),
@@ -180,10 +141,10 @@ def getGazeRatio(image,gray,faceLandmark,eye_points, W=480,H=640):
                                 (faceLandmark.part(eye_points[4]).x, faceLandmark.part(eye_points[4]).y),
                                 (faceLandmark.part(eye_points[5]).x, faceLandmark.part(eye_points[5]).y)], np.int32)
 
-    height, width, _ = image.shape
+    height, width = gray.shape
     mask = np.zeros((height, width), np.uint8)
-    cv2.polylines(image, [eye_region], True, 255, 2)
-    cv2.fillPoly(mask, [eye_region], 255)
+    # cv2.polylines(image, [eye_region], True, 255, 2)
+    # cv2.fillPoly(mask, [eye_region], 255)
     eye = cv2.bitwise_and(gray, gray, mask=mask)
 
 
@@ -227,8 +188,6 @@ def getGazeRatio(image,gray,faceLandmark,eye_points, W=480,H=640):
 
     return horizontal_gaze_ratio, vertical_gaze_ratio
 
-def modeList(L):
-    return max(set(L), key=L.count)
 # Model
 # def getGazeXY(image,face,eyes) : 
 # 	x = 500 + random.randint(-50, 50)
