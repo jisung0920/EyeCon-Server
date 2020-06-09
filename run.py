@@ -30,10 +30,6 @@ IP,PORT = args.ip, args.port
 BLINK_TH = args.blink_th
 
 
-
-
-device = torch.device('cpu')
-
 faceClassifier = econ.loadClassifier(util_path)
 predictor = dlib.shape_predictor(util_path + 'shape_predictor_68_face_landmarks.dat')
 detector = dlib.get_frontal_face_detector()
@@ -41,16 +37,22 @@ detector = dlib.get_frontal_face_detector()
 (lStart, lEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
 (rStart, rEnd) = face_utils.FACIAL_LANDMARKS_IDXS["right_eye"]
 
+prev_x, prev_y = ANRD_WIDTH/2, ANRD_HEIGHT/2
+momentum = 0.7
+
+
+device = torch.device('cpu')
+
+Gaze_model, FER_model = GazeModel(),FERModel()
+Gaze_model.eval()
+FERModel.eval()
+
 
 state_direction_num = 5
 state_Q_num = 3
 state_memory = econ.loadStateDict(state_direction_num,state_Q_num)
 
-Gaze_model, FER_model = GazeModel(),FERModel()
-Gaze_model.eval()
 
-prev_x, prev_y = ANRD_WIDTH/2, ANRD_HEIGHT/2
-momentum = 0.7
 
 print(IP,':',PORT)
 
@@ -78,7 +80,6 @@ try:
 
         inputData = Image.fromarray(image)
         inputData = transformImg(inputData)
-        inputData = torch.autograd.Variable(inputData, requires_grad = True)
 
         x,y = econ.getGazePoint(Gaze_model,inputData,ANRD_WIDTH,ANRD_HEIGHT)
 
@@ -110,7 +111,7 @@ try:
 
         print('[Face Point]')
 
-        facePoints = econ.classifyFace(image, faceClassifier)
+        facePoints = faceClassifier.detectMultiScale(image,1.2,cv2.COLOR_BGR2GRAY)
 
         if(len(facePoints)!= 0 ) :
             faceX,faceY = econ.getFaceXY(facePoints)
@@ -150,9 +151,9 @@ try:
 
         print('Integrate')
 
-        blink = econ.modeList(state_memory['Click'])
+        click = econ.modeList(state_memory['Click'])
         scroll = econ.modeList(state_memory['Scroll'])
-        if (blink == 1 or scroll == 1):
+        if (click == 1 or scroll == 1):
             FERNum = 0
             tagPosition = (0, 0)
         else:
@@ -171,7 +172,7 @@ try:
 
         print('\tSent to Client',end='\t')
 
-        cord = str(x) + '/' + str(y) + '/' +str(blink) + '/' + str(scroll) + '/' + str(FERNum)
+        cord = str(x) + '/' + str(y) + '/' +str(click) + '/' + str(scroll) + '/' + str(FERNum)
         print(cord)
         client_socket.sendall(bytes(cord,'utf8'))
 

@@ -55,26 +55,12 @@ def rateToDistance(r_x,r_y,width,height, weight = 1.5) :
 def loadClassifier(util_path) :
 
     face_haar_path = util_path + 'haarcascade_frontalface_default.xml'
-    # eye_haar_path  = util_path + 'haarcascade_eye.xml'
-    
     faceClassifier = cv2.CascadeClassifier(face_haar_path)
-    # eyeClassifier = cv2.CascadeClassifier(eye_haar_path)
     
     return faceClassifier
 
 
 
-
-def classifyFace(image,faceClassifier) :
-    
-    facePoints = faceClassifier.detectMultiScale(image,1.2,cv2.COLOR_BGR2GRAY)
-    faceImage = image.copy()
-    for (x,y,w,h) in facePoints :
-        faceImage = faceImage[y:y+h,x:x+w]
-
-    # eyePoints=eyeClassifier.detectMultiScale(faceImage,1.2,cv2.COLOR_BGR2GRAY)
-    
-    return facePoints
 
 
 
@@ -91,9 +77,9 @@ def isBlink(eyeLandmark,blink_th,start_idx,end_idx) :
     EAR = getEAR(eye)
 
     if EAR > blink_th:
-        return True
-    else :
         return False
+    else :
+        return True
 
 def getFaceXY(faceImage) :
     face = faceImage[0]
@@ -109,8 +95,8 @@ def getGazePoint(model,image,W,H):
         x_rate += result[i]
     for i in [0,1,2,3,4,5,6,7] :
         y_rate += result[i]
-    x = x_rate * W
-    y = y_rate * H
+    x = (W/4) + (1 - x_rate ) * W/2 
+    y = (H/4) + (1 - y_rate ) * H/2 
     return x,y
 
 
